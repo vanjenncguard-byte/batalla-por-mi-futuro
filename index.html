@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Batalla por mi Futuro — 2 jugadores</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:linear-gradient(135deg,#071a2d,#0c4560,#07121f);color:#fff;min-height:100vh}
+.screen{max-width:1050px;margin:auto;padding:28px 18px;text-align:center}
+.hidden{display:none!important}
+h1{font-size:clamp(2.3rem,6vw,4.5rem);margin:8px 0;text-shadow:0 5px 18px #000}
+h2{font-size:2rem}
+.subtitle{font-size:1.15rem;opacity:.9}
+button{border:0;border-radius:12px;padding:13px 20px;font-weight:bold;font-size:1rem;cursor:pointer;transition:.2s}
+button:hover{transform:translateY(-2px)}
+button:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.primary{background:#ffd166;color:#17202a}
+.secondary{background:#24546d;color:#fff}
+.danger{background:#d84b57;color:#fff}
+.card{background:#ffffff12;border:1px solid #ffffff2b;border-radius:20px;padding:24px;box-shadow:0 12px 30px #0005}
+input{width:min(100%,500px);padding:14px;border-radius:10px;border:1px solid #ffffff44;background:#ffffff10;color:#fff;font-size:1rem}
+.notice{margin:16px auto;padding:13px;border-radius:12px;background:#ffd1661c;border:1px solid #ffd16666;max-width:700px}
+.roomlink{word-break:break-all;font-size:.9rem;margin:12px 0;color:#a9e7ff}
+.players{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:20px 0}
+.player{padding:18px;border-radius:18px;background:#ffffff10;border:2px solid #ffffff1c}
+.player.active{border-color:#ffd166;box-shadow:0 0 20px #ffd16633}
+.name{font-size:1.25rem;font-weight:bold}
+.points{font-size:3.2rem;font-weight:bold}
+.you{font-size:.8rem;color:#ffd166}
+.timer{font-size:2.2rem;font-weight:bold;margin:12px}
+.progress{height:12px;background:#ffffff1b;border-radius:20px;overflow:hidden;margin:10px auto;max-width:650px}
+.progress span{display:block;height:100%;width:0;background:#ffd166;transition:width .2s}
+.question{max-width:800px;margin:20px auto;text-align:left}
+.question h3{margin-top:0}
+.options{display:grid;gap:10px}
+.option{text-align:left;background:#123d55;color:#fff;border:2px solid #28617f}
+.option.correct{background:#187a52}
+.option.wrong{background:#9b3440}
+.status{min-height:28px;font-weight:bold;margin:15px}
+.small{font-size:.9rem;opacity:.8}
+#winnerBox{font-size:1.15rem}
+@media(max-width:700px){.players{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<section id="home" class="screen">
+  <div style="font-size:4.5rem;margin-top:45px">⚔️🚢</div>
+  <h1>BATALLA POR MI FUTURO</h1>
+  <p class="subtitle">Juego digital para 2 jugadores en laptops diferentes</p>
+  <div class="card" style="max-width:700px;margin:30px auto">
+    <h2>Crear una partida</h2>
+    <p>Jugador 1 crea la sala y comparte el mismo enlace con el Jugador 2.</p>
+    <input id="nameInput" maxlength="18" placeholder="Escribe tu nombre">
+    <br><br>
+    <button class="primary" onclick="createRoom()">⚔️ CREAR PARTIDA</button>
+    <div id="homeStatus" class="status"></div>
+  </div>
+</section>
+
+<section id="lobby" class="screen hidden">
+  <h2>🚢 Sala de batalla</h2>
+  <div class="card">
+    <p><strong>Jugador 1:</strong> <span id="p1Lobby">Esperando...</span></p>
+    <p><strong>Jugador 2:</strong> <span id="p2Lobby">Esperando...</span></p>
+    <div class="notice">
+      <strong>Comparte este enlace con el otro jugador:</strong>
+      <div id="roomLink" class="roomlink"></div>
+      <button class="secondary" onclick="copyRoomLink()">📋 COPIAR ENLACE</button>
+    </div>
+    <p id="lobbyStatus">Esperando al Jugador 2...</p>
+    <button id="startBtn" class="primary hidden" onclick="hostStartGame()">▶️ INICIAR BATALLA</button>
+  </div>
+</section>
+
+<section id="game" class="screen hidden">
+  <h2>⚔️ BATALLA POR MI FUTURO</h2>
+  <div class="timer">⏱️ <span id="timer">03:00</span></div>
+  <div class="progress"><span id="timeBar"></span></div>
+
+  <div class="players">
+    <div id="p1Card" class="player">
+      <div class="name" id="p1Name">Jugador 1</div>
+      <div class="you" id="p1You"></div>
+      <div class="points"><span id="p1Score">0</span>/10</div>
+      <div>🚢 Puntos</div>
+    </div>
+    <div id="p2Card" class="player">
+      <div class="name" id="p2Name">Jugador 2</div>
+      <div class="you" id="p2You"></div>
+      <div class="points"><span id="p2Score">0</span>/10</div>
+      <div>🚢 Puntos</div>
+    </div>
+  </div>
+
+  <div class="card question">
+    <h3 id="qCategory">Pregunta</h3>
+    <p id="qText">Esperando...</p>
+    <div id="options" class="options"></div>
+    <div id="gameStatus" class="status"></div>
+  </div>
+</section>
+
+<section id="end" class="screen hidden">
+  <div class="card" style="margin-top:50px">
+    <div style="font-size:5rem">🏆</div>
+    <h1 id="winnerTitle">¡Tenemos ganador!</h1>
+    <div id="winnerBox"></div>
+    <br>
+    <button class="primary" onclick="location.href=location.pathname">🔄 NUEVA PARTIDA</button>
+  </div>
+</section>
+
+<script>
+const QUESTIONS = [
+ {c:"Autoconocimiento",q:"¿Por qué es importante conocer nuestros intereses antes de elegir una profesión?",o:["Para elegir lo mismo que nuestros amigos.","Para identificar actividades y áreas que nos gustan.","Para escoger la carrera más famosa.","Para evitar investigar."],a:1},
+ {c:"Metas",q:"¿Cuál es un ejemplo de una meta concreta?",o:["Quiero ser exitoso algún día.","Quiero mejorar mis calificaciones este año.","Quiero hacer algo importante.","Quiero tener suerte."],a:1},
+ {c:"Preparación académica y profesional",q:"¿Qué puede ayudar a una persona a prepararse para una profesión?",o:["Investigar sobre la carrera y estudiar.","Elegir sin conocerla.","Copiar la decisión de otra persona.","No informarse."],a:0},
+ {c:"Habilidades y fortalezas",q:"Una persona disfruta dibujar y tiene creatividad. ¿Qué debería hacer?",o:["Ignorar esa habilidad.","Explorar carreras donde pueda utilizarla.","Dejar de practicar.","Elegir cualquier carrera."],a:1},
+ {c:"Organización y disciplina",q:"¿Qué ayuda a cumplir una meta?",o:["Dejar todo para el último día.","Crear un plan y organizar el tiempo.","No establecer fechas.","Esperar que alguien lo haga."],a:1},
+ {c:"Toma de decisiones",q:"¿Qué debemos considerar antes de tomar una decisión importante?",o:["Solamente lo que hacen nuestros amigos.","Opciones, consecuencias, intereses y habilidades.","Elegir rápidamente.","Dejar que otra persona decida."],a:1},
+ {c:"Aprovechamiento de oportunidades",q:"¿Cuál es un ejemplo de aprovechar una oportunidad?",o:["Rechazar un curso que puede ayudarme.","Participar en un taller relacionado con mis intereses.","No investigar opciones.","Evitar aprender cosas nuevas."],a:1},
+ {c:"Superación de obstáculos",q:"Si estudiar una carrera parece costoso, ¿qué podríamos hacer?",o:["Abandonar inmediatamente.","Investigar becas y alternativas de apoyo.","No buscar información.","Elegir cualquier carrera."],a:1},
+ {c:"Reto de análisis",q:"María quiere estudiar una carrera, pero no sabe qué habilidades posee ni qué actividades disfruta. ¿Qué debería hacer antes de decidir?",o:["Elegir la carrera de su amiga.","Conocerse, identificar sus intereses y reconocer sus habilidades.","Elegir la carrera más popular.","Dejar que otra persona decida."],a:1},
+ {c:"Reto de análisis",q:"Carlos quiere estudiar una carrera, pero los materiales son costosos. ¿Qué debería hacer?",o:["Abandonar su meta.","Investigar becas, alternativas y opciones de apoyo.","No hacer nada.","Elegir otra carrera sin investigarla."],a:1}
+];
+
+let peer=null, conn=null, isHost=false, myName="", myId="";
+let state={p1:{name:"Jugador 1",score:0},p2:{name:"Jugador 2",score:0},started:false,ended:false,deadline:0};
+let myPlayer=0, currentQuestion=null, questionLocked=false, timerInterval=null;
+const params=new URLSearchParams(location.search);
+const room=params.get("room");
+
+function show(id){
+ document.querySelectorAll(".screen").forEach(x=>x.classList.add("hidden"));
+ document.getElementById(id).classList.remove("hidden");
+}
+
+function createRoom(){
+ myName=document.getElementById("nameInput").value.trim()||"Jugador 1";
+ isHost=true; myPlayer=1;
+ myId="future-"+Math.random().toString(36).slice(2,10);
+ peer=new Peer(myId);
+ peer.on("open", id=>{
+   myId=id;
+   const url=location.origin+location.pathname+"?room="+encodeURIComponent(id);
+   history.replaceState({}, "", "?room="+encodeURIComponent(id));
+   state.p1.name=myName;
+   saveLocal();
+   document.getElementById("roomLink").textContent=url;
+   document.getElementById("p1Lobby").textContent=myName;
+   document.getElementById("lobbyStatus").textContent="Esperando al Jugador 2...";
+   show("lobby");
+ });
+ peer.on("connection", c=>{
+   if(conn) return;
+   conn=c;
+   myPlayer=1;
+   setupConnection();
+ });
+}
+
+function joinRoom(){
+ myName=document.getElementById("nameInput")?.value.trim() || "Jugador 2";
+ myPlayer=2; isHost=false;
+ peer=new Peer();
+ peer.on("open", id=>{
+   conn=peer.connect(room);
+   setupConnection();
+ });
+}
+
+function setupConnection(){
+ conn.on("open", ()=>{
+   send({type:"join",name:myName});
+ });
+ conn.on("data", msg=>handle(msg));
+ conn.on("close", ()=>setStatus("La conexión se cerró."));
+}
+
+function send(msg){
+ if(conn && conn.open) conn.send(msg);
+}
+
+function handle(msg){
+ if(msg.type==="join" && isHost){
+   state.p2.name=msg.name||"Jugador 2";
+   document.getElementById("p2Lobby").textContent=state.p2.name;
+   document.getElementById("lobbyStatus").textContent="¡Jugador 2 conectado! Ya pueden comenzar.";
+   document.getElementById("startBtn").classList.remove("hidden");
+   send({type:"lobby",state});
+ }
+ if(msg.type==="lobby"){ state=msg.state; renderLobby(); }
+ if(msg.type==="start"){ state=msg.state; showGame(); }
+ if(msg.type==="score"){ state=msg.state; updateScores(); if(msg.ended) finishGame(); }
+ if(msg.type==="question"){ currentQuestion=msg.question; renderQuestion(); }
+ if(msg.type==="end"){ state=msg.state; finishGame(); }
+}
+
+function renderLobby(){
+ document.getElementById("p1Lobby").textContent=state.p1.name;
+ document.getElementById("p2Lobby").textContent=state.p2.name;
+ if(state.p2.name!=="Jugador 2"){
+   document.getElementById("lobbyStatus").textContent="¡Jugador 2 conectado!";
+   if(isHost) document.getElementById("startBtn").classList.remove("hidden");
+ }
+}
+
+function hostStartGame(){
+ state.started=true; state.ended=false; state.p1.score=0; state.p2.score=0;
+ state.deadline=Date.now()+180000;
+ send({type:"start",state});
+ showGame();
+}
+
+function showGame(){
+ show("game");
+ updateScores();
+ startTimer();
+ nextQuestion();
+}
+
+function updateScores(){
+ document.getElementById("p1Name").textContent=state.p1.name;
+ document.getElementById("p2Name").textContent=state.p2.name;
+ document.getElementById("p1Score").textContent=state.p1.score;
+ document.getElementById("p2Score").textContent=state.p2.score;
+ document.getElementById("p1You").textContent=myPlayer===1?"TÚ":"";
+ document.getElementById("p2You").textContent=myPlayer===2?"TÚ":"";
+ document.getElementById("p1Card").classList.toggle("active",myPlayer===1);
+ document.getElementById("p2Card").classList.toggle("active",myPlayer===2);
+}
+
+function startTimer(){
+ clearInterval(timerInterval);
+ timerInterval=setInterval(()=>{
+   const remaining=Math.max(0,state.deadline-Date.now());
+   const sec=Math.ceil(remaining/1000);
+   document.getElementById("timer").textContent=
+      String(Math.floor(sec/60)).padStart(2,"0")+":"+String(sec%60).padStart(2,"0");
+   const pct=Math.max(0,remaining/180000*100);
+   document.getElementById("timeBar").style.width=pct+"%";
+   if(remaining<=0){
+     clearInterval(timerInterval);
+     if(isHost) endGame();
+   }
+ },200);
+}
+
+function nextQuestion(){
+ if(state.ended || Date.now()>=state.deadline) return;
+ questionLocked=false;
+ currentQuestion=QUESTIONS[Math.floor(Math.random()*QUESTIONS.length)];
+ send({type:"question",question:currentQuestion});
+ renderQuestion();
+}
+
+function renderQuestion(){
+ if(!currentQuestion)return;
+ document.getElementById("qCategory").textContent="❓ "+currentQuestion.c;
+ document.getElementById("qText").textContent=currentQuestion.q;
+ const box=document.getElementById("options"); box.innerHTML="";
+ currentQuestion.o.forEach((text,i)=>{
+   const b=document.createElement("button");
+   b.className="option";
+   b.textContent=String.fromCharCode(65+i)+". "+text;
+   b.onclick=()=>answer(i,b);
+   box.appendChild(b);
+ });
+ document.getElementById("gameStatus").textContent="Responde para ganar 1 punto.";
+}
+
+function answer(index,button){
+ if(questionLocked || state.ended)return;
+ questionLocked=true;
+ document.querySelectorAll(".option").forEach(x=>x.disabled=true);
+ if(index===currentQuestion.a){
+   button.classList.add("correct");
+   state[myPlayer===1?"p1":"p2"].score++;
+   document.getElementById("gameStatus").textContent="💥 ¡Correcto! +1 punto.";
+   updateScores();
+   send({type:"score",state,ended:state.p1.score>=10||state.p2.score>=10});
+   if(state.p1.score>=10||state.p2.score>=10){
+      if(isHost) endGame();
+      return;
+   }
+ }else{
+   button.classList.add("wrong");
+   document.getElementById("gameStatus").textContent="🌊 Incorrecto. No ganas punto.";
+ }
+ setTimeout(nextQuestion,700);
+}
+
+function endGame(){
+ if(state.ended)return;
+ state.ended=true;
+ send({type:"end",state});
+ finishGame();
+}
+
+function finishGame(){
+ clearInterval(timerInterval);
+ updateScores();
+ show("end");
+ let winner;
+ if(state.p1.score>state.p2.score) winner=state.p1.name;
+ else if(state.p2.score>state.p1.score) winner=state.p2.name;
+ else winner="¡Empate!";
+ document.getElementById("winnerTitle").textContent=
+   winner==="¡Empate!"?"🤝 ¡EMPATE!":"🏆 ¡"+winner+" GANA!";
+ document.getElementById("winnerBox").innerHTML=
+   "<p><strong>"+state.p1.name+": "+state.p1.score+" puntos</strong></p>"+
+   "<p><strong>"+state.p2.name+": "+state.p2.score+" puntos</strong></p>"+
+   "<p>La partida termina al llegar a <strong>10 puntos</strong> o cuando se acaba el tiempo.</p>";
+}
+
+function setStatus(text){document.getElementById("gameStatus").textContent=text}
+function copyRoomLink(){
+ navigator.clipboard?.writeText(document.getElementById("roomLink").textContent);
+ document.getElementById("lobbyStatus").textContent="✅ Enlace copiado.";
+}
+function saveLocal(){localStorage.setItem("futureRoom",JSON.stringify(state))}
+
+// Si se abre un enlace con ?room=..., entra como jugador 2.
+if(room){
+ document.getElementById("home").classList.remove("hidden");
+ document.getElementById("home").querySelector(".card").innerHTML=`
+   <h2>Unirse a la partida</h2>
+   <p>Escribe tu nombre para entrar como Jugador 2.</p>
+   <input id="joinName" maxlength="18" placeholder="Tu nombre">
+   <br><br>
+   <button class="primary" onclick="joinFromLink()">🚢 UNIRME A LA BATALLA</button>
+   <div id="joinStatus" class="status"></div>`;
+}
+
+function joinFromLink(){
+ myName=document.getElementById("joinName").value.trim()||"Jugador 2";
+ myPlayer=2; isHost=false;
+ peer=new Peer();
+ peer.on("open",()=>{conn=peer.connect(room);setupConnection();show("lobby")});
+ peer.on("error",e=>document.getElementById("joinStatus").textContent="No se pudo conectar. Comprueben el enlace y el internet.");
+}
+</script>
+</body>
+</html>
